@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原生 JS 虚拟滚动表格</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <strong>原生 JS 虚拟滚动表格</strong>
+  <span class="muted">1 万行 · 只渲染可视区域 · 无框架无依赖</span>
+  <div class="grow"></div>
+  <input class="search" data-search placeholder="搜索姓名 / 部门 / 级别" />
+</header>
+
+<div class="bar">
+  <span class="muted">总数据</span>
+  <b class="vt-stat">—</b>
+  <span class="muted">·</span>
+  <span class="muted">当前渲染</span>
+  <b data-rendered>—</b>
+  <span class="muted">个 DOM 节点</span>
+  <span data-selected-count class="sel-count"></span>
+</div>
+
+<div class="vt">
+  <div class="vt-head">
+    <div class="vt-row"><span class="c c-chk"></span><span class="c c-id" data-key="id">ID</span><span class="c c-name" data-key="name">姓名</span><span class="c c-dept" data-key="dept">部门</span><span class="c c-level" data-key="level">级别</span><span class="c c-salary" data-key="salary">月薪</span><span class="c c-date" data-key="joinedAt">入职日期</span></div>
+  </div>
+  <div class="vt-viewport">
+    <div class="vt-phantom"></div>
+    <div class="vt-body"></div>
+  </div>
+</div>
+
+<footer class="foot">
+  <span>点表头排序 · 点行选中 · 搜索框防抖 200ms · 滚动用 requestAnimationFrame 合并</span>
+  <span class="grow"></span>
+  <span class="muted">控制台可用 <code>__table</code> 调试</span>
+</footer>
+
+<script src="table.js"></script>
+</body>
+</html>

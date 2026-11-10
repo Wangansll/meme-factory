@@ -1,0 +1,110 @@
+:root {
+  --bg: #0f1117;
+  --panel: #161a23;
+  --line: #262c3a;
+  --ink: #e6e9ef;
+  --dim: #8b93a5;
+  --pri: #4d8dff;
+  --sel: #1d2a44;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  font-size: 13px; display: flex; flex-direction: column; height: 100vh;
+}
+
+.top {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; height: 56px; flex: 0 0 auto;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.top strong { font-size: 15px; }
+.grow { flex: 1; }
+.muted { color: var(--dim); font-size: 12px; }
+.search {
+  width: 260px; font: inherit; padding: 7px 12px;
+  background: #0d1017; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.search:focus { outline: 2px solid rgba(77,141,255,.35); border-color: var(--pri); }
+
+.bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 20px; flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.bar b { color: var(--pri); font-weight: 600; }
+.sel-count { color: var(--pri); margin-left: auto; }
+
+.vt {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+  margin: 0 20px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden;
+}
+
+/* 表头与行共用同一套列宽，用 grid 保证对齐 */
+.vt-row, .vt-head .vt-row {
+  display: grid;
+  grid-template-columns: 40px 70px 1.4fr 1fr 80px 110px 130px;
+  align-items: center;
+}
+
+.vt-head {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  background: #1b2030;
+  position: relative; z-index: 2;
+}
+.vt-head .vt-row { height: 40px; }
+.vt-head .c {
+  display: flex; align-items: center;
+  font-weight: 600; color: var(--dim); font-size: 12px;
+  height: 100%; user-select: none;
+}
+.vt-head .c[data-key] { cursor: pointer; }
+.vt-head .c[data-key]:hover { color: var(--ink); }
+.vt-head .c.asc::after { content: "↑"; color: var(--pri); margin-left: 4px; }
+.vt-head .c.desc::after { content: "↓"; color: var(--pri); margin-left: 4px; }
+
+.vt-viewport {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  position: relative;
+  contain: strict;              /* 隔离布局与绘制，滚动更稳 */
+}
+.vt-phantom { width: 1px; opacity: 0; pointer-events: none; }
+.vt-body { position: absolute; inset: 0 0 auto 0; }
+
+/* 只有表体里的行才绝对定位；表头行是普通文档流 */
+.vt-body .vt-row {
+  position: absolute; left: 0; right: 0; top: 0;
+  height: 40px;
+  border-bottom: 1px solid #1e2432;
+  will-change: transform;
+}
+.vt-head .vt-row { position: static; }
+.vt-row:hover { background: #1a2030; }
+.vt-row.sel { background: var(--sel); }
+.c { padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-chk { display: flex; align-items: center; justify-content: center; }
+.c-id { color: var(--dim); }
+.c-salary, .c-date { font-variant-numeric: tabular-nums; }
+input[type="checkbox"] { accent-color: var(--pri); cursor: pointer; }
+
+.foot {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 20px 14px; font-size: 12px; color: var(--dim);
+  flex: 0 0 auto;
+}
+code { background: #1b2030; padding: 1px 6px; border-radius: 4px; color: var(--pri); }
+
+/* 滚动条 */
+.vt-viewport::-webkit-scrollbar { width: 10px; }
+.vt-viewport::-webkit-scrollbar-thumb { background: #2a3145; border-radius: 5px; }
+.vt-viewport::-webkit-scrollbar-thumb:hover { background: #39415a; }

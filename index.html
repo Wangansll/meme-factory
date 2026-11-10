@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%232B2519%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2718%27 fill=%27%23FFD338%27/%3E%3Ccircle cx=%2740%27 cy=%2724%27 r=%276%27 fill=%27%23050508%27/%3E%3C/svg%3E">
+<title>表情包工厂 · AI 帮你量产一整套表情包</title>
+<meta name="description" content="输入一个梗，AI 自动设计 9 张表情包：画面、文案、情绪全搞定，一键下载九宫格或生成分享链接。">
+<link rel="stylesheet" href="style.css">
+<script src="vendor/workbuddy-cloud-sdk.js"></script>
+<script src="vendor/qrcode.min.js"></script>
+</head>
+<body>
+<div class="page">
+  <header class="hero">
+    <div class="logo-row">
+      <span class="logo-badge">梗</span>
+      <h1>表情包工厂</h1>
+      <span class="beta-tag">AI 量产</span>
+    </div>
+    <p class="slogan">输入一个梗，AI 帮你设计 9 张表情包 —— 画面、文案、情绪一次到位</p>
+    <div class="hero-feats">
+      <span class="feat">9 张成套</span>
+      <span class="feat">13 档画风</span>
+      <span class="feat">透明抠图</span>
+      <span class="feat">一键分享</span>
+    </div>
+    <a class="arena-entry" href="/arena/">🎮 梗图大乱斗 · 谁是梗王</a>
+    <a class="arena-entry" href="/fx/">🌌 流光宇宙 · 霓虹流体画布</a>
+  </header>
+
+  <section class="maker card">
+    <div class="input-row">
+      <input id="themeInput" type="text" maxlength="30" placeholder="输入一个梗 / 主题，如：打工人周一早八" autocomplete="off">
+      <button id="genBtn" class="btn-primary">开工！</button>
+    </div>
+    <div class="chips" id="exampleChips">
+      <button class="chip" data-t="打工人周一早八">打工人周一早八</button>
+      <button class="chip" data-t="i人被迫营业">i人被迫营业</button>
+      <button class="chip" data-t="减肥第一天">减肥第一天</button>
+      <button class="chip" data-t="尊嘟假嘟">尊嘟假嘟</button>
+      <button class="chip" data-t="期末周大学生">期末周大学生</button>
+      <button class="chip" data-t="猫猫的精神状态">猫猫精神状态</button>
+    </div>
+    <div class="engine-row">
+      <span class="engine-label">引擎</span>
+      <div class="seg" id="engineSeg">
+        <button data-engine="ai">AI 生图 · XT2</button>
+        <button data-engine="vector">手绘矢量 · 省额度</button>
+      </div>
+      <span class="ctl-sep"></span>
+      <span class="engine-label">画风</span>
+      <div class="style-pick" id="stylePick">
+        <button type="button" class="style-pick-btn" id="stylePickBtn">
+          <span class="sp-thumb" id="stylePickThumb"></span>
+          <span id="stylePickLabel">萌系贴纸</span>
+          <span class="sp-caret">▾</span>
+        </button>
+        <div class="style-pop" id="stylePop" hidden></div>
+      </div>
+      <select id="styleSel" class="visually-hidden" tabindex="-1" aria-hidden="true">
+        <option value="meng">萌系贴纸 · 默认</option>
+        <option value="panda">熊猫头 · 经典梗图</option>
+        <option value="doge">柴犬 Doge</option>
+        <option value="sketch">黑白简笔漫画</option>
+        <option value="pixel">像素风</option>
+        <option value="toy">3D 盲盒潮玩</option>
+        <option value="comic">热血漫画风</option>
+        <option value="photo">写实照片梗图</option>
+        <option value="healing">日系治愈插画</option>
+        <option value="usacartoon">美式卡通</option>
+        <option value="ink">国风水墨</option>
+        <option value="cyber">赛博霓虹</option>
+        <option value="minimal">极简线条</option>
+      </select>
+      <span class="ctl-sep"></span>
+      <span class="engine-label">背景</span>
+      <select id="gp_background" class="style-sel" title="有背景：按画风铺满底色；无背景：纯角色抠图（透明 PNG）">
+        <option value="opaque">有背景 · 按画风</option>
+        <option value="transparent">无背景 · 纯角色</option>
+      </select>
+      <label class="likeness" title="直写角色名给生图模型，更像但个别词可能被生图服务拦截"><input type="checkbox" id="likenessChk"> 角色还原</label>
+    </div>
+    <details class="genp">
+      <summary>生成参数 · 档位 / 比例 / 画质 / 格式</summary>
+      <div class="genp-grid">
+        <label>档位<select id="gp_version"><option value="flare">标准版 · 快</option><option value="sunburst">增强版 · 细腻</option></select></label>
+        <label>比例<select id="gp_size"><option value="1024x1024">1:1 正方形</option><option value="1536x1024">3:2 横版</option><option value="1024x1536">2:3 竖版</option><option value="auto">自适应</option></select></label>
+        <label>画质<select id="gp_quality"><option value="auto">自适应</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">超高</option><option value="max">极致</option></select></label>
+        <label>复杂度<select id="gp_complexity"><option value="">自适应</option><option value="low">低 · 简约</option><option value="medium">中</option><option value="high">高 · 海报级</option></select></label>
+        <label>输出格式<select id="gp_output_format"><option value="png">PNG 静图</option><option value="jpeg">JPEG</option><option value="webp">WebP</option><option value="svg">SVG 矢量</option><option value="gif">GIF 动图</option></select></label>
+        <label class="gp-gifrow" style="display:none;">GIF 帧数<select id="gp_frame_count"><option value="9">9 帧 · 本线路</option><option value="4">4 帧</option><option value="6">6 帧</option><option value="12">12 帧</option><option value="16">16 帧</option></select></label>
+        <label class="gp-gifrow" style="display:none;">每帧时长<select id="gp_frame_duration_ms"><option value="200">200 毫秒 · 本线路</option><option value="100">100 毫秒</option><option value="300">300 毫秒</option><option value="500">500 毫秒</option><option value="1000">1 秒</option></select></label>
+      </div>
+      <p class="genp-note">GIF 同价 · 本线路不支持透明背景 · SVG 可无限放大 · 高画质等待更久</p>
+    </details>
+    <div class="pass-row" id="passRow">
+      <input id="passInput" type="password" maxlength="48" autocomplete="off" spellcheck="false" placeholder="访问密钥 · 免等待生成">
+      <button class="btn-ghost" id="passBtn">解锁极速</button>
+    </div>
+    <p class="pass-hint" id="passHint">访问密钥：mf-demo-2026（解锁后免等待生成）</p>
+    <div class="status-bar" id="statusBar">
+      <span class="status-dot"></span><span id="statusText">待命中 · 今天想量产什么梗？</span>
+    </div>
+    <div class="cover" id="makerCover" hidden>
+      <div class="scan"></div>
+      <div class="orbit"></div>
+      <p class="ov-txt" id="coverText">正在解读梗点…</p>
+      <button class="btn-primary" id="cancelBtn">取消生成</button>
+      <p class="cover-sub">取消不会重置冷却 · 已完成的图会保留</p>
+    </div>
+  </section>
+
+  <section class="result" id="resultArea">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-faces" id="emptyFaces"></div>
+      <p>AI 设计师已就位<br>在上方输入一个梗，这里就会产出 9 张能直接扔群里的表情包</p>
+    </div>
+
+    <div class="set-wrap" id="setWrap" hidden>
+      <div class="set-head">
+        <h2 id="themeTitle"></h2>
+        <div class="set-actions">
+          <label class="baketext" title="勾选后：下载的图片会把你改的文案烙进图里"><input type="checkbox" id="bakeTextChk"> 下载图上加文字</label>
+          <button class="btn-ghost" id="aiRemakeBtn" hidden>AI 高清出图</button>
+          <button class="btn-ghost" id="regenBtn">换个灵感重画</button>
+          <button class="btn-ghost" id="gridBtn">下载九宫格</button>
+          <button class="btn-primary btn-sm" id="shareBtn">分享给朋友</button>
+        </div>
+      </div>
+      <div class="sticker-grid" id="stickerGrid"></div>
+      <p class="tip">点文案可以直接改字 · 点图片可放大保存单张</p>
+    </div>
+  </section>
+
+  <section class="history-wrap" id="historyBox" hidden>
+    <div class="hist-head">
+      <h3>历史存档<span class="hist-note">本机独立保存最近 300 张 · 滚动加载 · 每张可单独下载/分享</span></h3>
+      <button class="btn-ghost btn-sm" id="clearHistBtn">清空</button>
+    </div>
+    <div class="hist-strip" id="histStrip"></div>
+  </section>
+
+  <footer class="foot">
+    <span>AI 表情包工厂 · 靓仔王出品</span>
+    <span id="remakeBanner" class="remake" hidden>你正在看朋友分享的作品 —— <a href="#" id="remakeLink">一键做同款</a></span>
+  </footer>
+</div>
+
+<div class="modal" id="previewModal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-body">
+    <div id="previewImgBox"></div>
+    <div class="modal-caption">
+      <input id="previewCaptionInput" maxlength="8" placeholder="改文案">
+      <button class="btn-primary btn-sm" id="previewSaveBtn">保存文案</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="previewRedrawBtn">重画这张</button>
+      <button class="btn-ghost" id="previewShareBtn">分享这张</button>
+      <button class="btn-primary" id="previewDownloadBtn">下载 PNG</button>
+    </div>
+    <label class="baketext" style="margin-top:10px; justify-content:center;"><input type="checkbox" id="bakeTextChk2"> 下载时在图上加文字</label>
+    <button class="modal-x" data-close>×</button>
+  </div>
+</div>
+
+<div class="modal" id="shareModal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-body share-body">
+    <h3>分享这套表情包</h3>
+    <div id="qrcodeBox"></div>
+    <p class="share-tip" id="shareTip">扫码或复制链接发给朋友，打开就能「做同款」</p>
+    <div class="share-row">
+      <input id="shareLinkInput" readonly>
+      <button class="btn-primary btn-sm" id="copyLinkBtn">复制</button>
+    </div>
+    <button class="modal-x" data-close>×</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js?v=20261110a"></script>
+</body>
+</html>

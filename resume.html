@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>王安顺 · 前端开发实习生</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --ink: #1b1f28;
+    --body: #333a46;
+    --dim: #6b7380;
+    --acc: #a9551c;
+    --line: #d6dae2;
+  }
+
+  html, body { background: #fff; }
+
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 9mm 15mm 7mm 15mm;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    color: var(--body);
+    font-size: 8.6pt;
+    line-height: 1.42;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 抬头 ── */
+  .name { font-size: 21pt; font-weight: 700; color: var(--ink); letter-spacing: 0.06em; }
+  .role { font-size: 10pt; color: var(--acc); margin-left: 8px; font-weight: 600; }
+  .meta { font-size: 8.3pt; color: var(--dim); margin-top: 3px; }
+  .intent { font-size: 8.5pt; color: var(--ink); font-weight: 700; margin-top: 2px; }
+
+  /* ── 小节 ── */
+  h2 {
+    font-size: 10.5pt;
+    color: var(--acc);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    margin: 7px 0 3px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  p.para { font-size: 8.4pt; line-height: 1.45; color: var(--body); }
+
+  /* ── 技能行 ── */
+  .kv { display: flex; gap: 6px; font-size: 8.2pt; line-height: 1.45; margin-bottom: 2px; }
+  .kv b { flex: 0 0 52px; color: var(--ink); font-weight: 700; }
+  .kv span { flex: 1; }
+
+  /* ── 项目 ── */
+  .item { margin-top: 4px; }
+  .item-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .item-head .t { font-size: 9.4pt; font-weight: 700; color: var(--ink); }
+  .item-head .d { font-size: 8pt; color: var(--dim); white-space: nowrap; }
+  .tag { font-size: 8.6pt; color: var(--acc); font-weight: 700; }
+
+  ul { list-style: none; margin-top: 1px; }
+  li {
+    font-size: 8.3pt;
+    line-height: 1.42;
+    padding-left: 11px;
+    position: relative;
+    margin-bottom: 1.5px;
+    color: var(--body);
+  }
+  li::before {
+    content: "";
+    position: absolute;
+    left: 2px; top: 0.62em;
+    width: 3.2px; height: 3.2px;
+    background: var(--acc);
+    border-radius: 50%;
+  }
+  li b { color: var(--ink); font-weight: 700; }
+
+  .foot {
+    margin-top: 8px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+    font-size: 7.8pt;
+    color: var(--dim);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div>
+    <span class="name">王 安 顺</span><span class="role">前端开发实习生</span>
+  </div>
+  <div class="meta">
+    2027 届 · 南宁数字科技学院 · 计算机科学与技术（本科）｜19377481748｜3116830377@qq.com｜github.com/Wangansll
+  </div>
+  <div class="intent">求职意向：前端开发实习 · 2026 年 12 月起可全职（每周 ≥4 天）· 地点不限</div>
+
+  <h2>自我定位</h2>
+  <p class="para">
+    Vue 3 + TypeScript 做前端，Node.js + MySQL 做后端，整套能自己跑通一个完整业务：
+    建表、写接口、做页面、连权限、查慢 SQL。比起只写页面，我更习惯把「数据从哪来、接口怎么设计、脏数据怎么兜住」一起想清楚。
+  </p>
+
+  <h2>专业技能</h2>
+  <div class="kv"><b>前端</b><span>HTML5 / CSS3（Flex、Grid、响应式、层叠上下文）、JavaScript ES6+（闭包、原型链、this、事件循环、Promise / async-await）</span></div>
+  <div class="kv"><b>Vue 3</b><span>Composition API、<code>&lt;script setup&gt;</code>、Pinia 状态管理、组件通信（props / emit / provide-inject）、递归组件、defineModel、Vue Router 路由守卫与权限</span></div>
+  <div class="kv"><b>TypeScript</b><span>接口与类型别名、泛型、联合类型与类型收窄、工具类型；用 <code>vue-tsc</code> 做全量类型检查</span></div>
+  <div class="kv"><b>Node.js</b><span>Express / 原生 <code>http</code> 搭 RESTful 接口、中间件与统一错误处理、JWT 鉴权、异步任务队列与轮询、文件上传</span></div>
+  <div class="kv"><b>MySQL</b><span>建表与数据类型选型、主外键与索引（联合索引、最左前缀）、多表联查、事务与行锁、慢查询定位与 Explain</span></div>
+  <div class="kv"><b>工具</b><span>Git 分支与冲突解决、Vite 构建与代理配置、Postman / Apifox 接口调试、Linux 常用命令</span></div>
+
+  <h2>项目经历</h2>
+
+  <div class="item">
+    <div class="item-head">
+      <span class="t">体育场官网 · 票务与内容管理系统　<span class="tag">Vue 3 + TS + Node + MySQL</span></span>
+      <span class="d">2026.11 – 至今</span>
+    </div>
+    <ul>
+      <li><b>站点结构</b>：前台 10 个栏目（首页 / 购票 / 场馆 / 活动 / 新闻 / 回顾 / 公益 / 商务合作 / 信息公开 / 联系）+ 后台 6 模块（概览 / 场馆 / 内容 / 留言 / 预约审核 / 票务核销），17 张表、40 余个 REST 接口。</li>
+      <li><b>选座购票</b>：<code>seat_locks</code> 对 <code>(seat_id, session_id)</code> 建唯一索引当库存，两人抢同一座第二条 INSERT 直接失败返回 409；锁 15 分钟过期释放；下单时校验锁归属与有效期。</li>
+      <li><b>支付与出票</b>：订单金额<b>只由服务端按票档计算</b>（实测前端传 <code>amountCents=1</code> 仍算出 560 元）；支付做成 provider 抽象，本地 mock 跑通「支付→出票→核销」，微信支付留实现位，缺商户号时明确报 503 而不是假装成功。</li>
+      <li><b>预约防重</b>：场地预约用「生成列 <code>active</code> + <code>(场馆ID,日期,时段,active)</code> 联合唯一索引」挡在数据库层，取消后 <code>active</code> 变 NULL 可重约；校验与写入同一事务，<code>SELECT … FOR UPDATE</code> 锁行。</li>
+      <li><b>内容模型</b>：新闻与活动共用 <code>articles</code> 表，<code>type</code> 区分、<code>status</code> 做草稿→发布状态机；后台富文本编辑器零依赖自写（<code>contenteditable</code> + 命令栈），图片上传落到 <code>/uploads</code>。</li>
+      <li><b>工程化</b>：环境变量集中校验（生产密钥不足 32 位拒绝启动）、JSON 结构化日志 + 请求 ID 贯穿、24 条错误码表与统一错误处理（5xx 不外泄堆栈）、滑动窗口限流、迁移运行器（checksum 防篡改）、优雅关闭；<b>Vitest + Supertest 13 个接口测试</b>、Docker Compose、GitHub Actions、OpenAPI 文档。</li>
+      <li><b>前端</b>：设计令牌化 CSS 变量体系、Grid 应用外壳、<code>auto-fill</code> 卡片网格、1080px 断点侧栏转汉堡菜单、轮播箭头 + 指示点 + 键盘 + 悬停暂停、骨架屏与空状态、四态时段徽标、<code>focus-visible</code> 焦点环。</li>
+    </ul>
+  </div>
+
+  <div class="item">
+    <div class="item-head">
+      <span class="t">表情包工厂 · AI 表情包生产线　<span class="tag">原生 HTML/CSS/JS + Node + LLM</span></span>
+      <span class="d">2026.10 – 2026.11</span>
+    </div>
+    <ul>
+      <li><b>后端</b>：不引框架，用 Node 原生 <code>http</code> 实现 6 个 REST 端点（会话 / 生成 / 状态 / 回调 / 列表 / 删除），自己处理路由分发、请求体解析和 CORS。</li>
+      <li><b>异步任务</b>：提交后立刻返回 <code>jobId</code>，前端轮询状态接口增量刷新；用 <code>AbortSignal</code> 支持中途取消，任务在服务端继续跑，结果只取一次。</li>
+      <li><b>原生前端</b>：不引任何框架与构建工具，纯 HTML + CSS + JavaScript（2000+ 行）实现参数面板、任务进度与结果预览；CSS 变量做主题，原生 <code>fetch</code> + 轮询做状态同步。</li>
+      <li><b>LLM 与生图</b>：接第三方图像生成模型，把「模板 + 风格 + 文案」拼成提示词；处理长任务轮询（提交拿 taskId → 轮询状态 → 下载结果）、超时与限流重试，并把上游错误翻译成用户能看懂的话。</li>
+    </ul>
+  </div>
+
+  <div class="item">
+    <div class="item-head">
+      <span class="t">定格动画龙 · 16 面向技术验证　<span class="tag">Canvas / Blender / 自动化管线</span></span>
+      <span class="d">2026.11</span>
+    </div>
+    <ul>
+      <li><b>问题</b>：3D 角色直接投在 2D 页面上，形变和光照都对不上；AI 逐帧生图又保证不了一致性。改成「预渲染 16 个角度 + 运行时按方向选帧」。</li>
+      <li><b>做法</b>：用 Blender 脚本把身体做成<b>非对称</b>（背红鳞 / 腹奶白 / 背脊锯齿鳍），绕视线轴烘 16 张定格帧；前端按链节切线的 16 档取图，<b>零旋转直接贴</b>。身体由 FTL 链条驱动，头部追鼠标、后面每节保持间距滞后，形成蛇行。</li>
+      <li><b>踩坑</b>：首版身体轴对称，16 张图几乎一样，等于 1 张；改成非对称后每一档才真的不同。链条增益过大（1.35）会直接撕裂网格，硬夹到每节 ±0.16 rad 才稳定。</li>
+      <li><b>工程</b>：资产全部脚本化生成（Blender <code>bpy</code> 渲染 + 压缩 + 命名），16 张 320×198 共 766 KB。</li>
+    </ul>
+  </div>
+
+  
+
+  
+
+  <h2>教育背景</h2>
+  <div class="item">
+    <div class="item-head">
+      <span class="t">南宁数字科技学院　计算机科学与技术（本科）</span>
+      <span class="d">2023.09 – 2027.06</span>
+    </div>
+    <ul>
+      <li>主修：数据结构、计算机网络、数据库原理、操作系统、JavaEE 应用开发、Linux 系统与应用。</li>
+    </ul>
+  </div>
+
+  <h2>工程习惯</h2>
+  <ul>
+    <li><b>先跑通再优化</b>：新东西先写最小可运行版本，验证通路后再补异常、边界和性能，不在一开始堆架构。</li>
+    <li><b>用 AI 但不交出判断</b>：Cursor / Claude Code 负责体力活，方案、取舍、验收自己把关——能讲清每一行为什么这么写，才算真的学过。</li>
+  </ul>
+
+  <div class="foot">
+    以上项目均可在本地启动、现场演示；源码见 github.com/Wangansll
+  </div>
+
+</div>
+</body>
+</html>

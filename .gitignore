@@ -1,0 +1,26 @@
+# 机密 / 本地生成物，不要进仓库
+session-secret.key
+.env
+.env.*
+node_modules/
+
+# 日志与临时文件
+*.log
+_probe/edge*/
+
+# 生成素材（约 1.7 GB，不进仓库）
+fx/
+arena/out/
+share-store.json
+
+# 打包/临时
+*.tar.gz
+*.zip
+
+# 密钥文件（任何 *.key 都不进仓库）
+*.key
+arena/arena-secret.key
+
+# 备份文件
+*.bak
+*.bak4

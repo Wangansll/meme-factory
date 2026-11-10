@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>梗图大乱斗 · 谁是梗王</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page">
+
+    <!-- ===== 首页 ===== -->
+    <section id="homeView">
+      <header class="hero">
+        <div class="logo-badge">梗</div>
+        <h1>梗图大乱斗</h1>
+        <p class="slogan">10 道题 · 10 秒一题 · 连击越久分越高<br>看看你是不是今年的梗王</p>
+        <div class="feat-row">
+          <span class="feat">🔥 连击加成</span>
+          <span class="feat">⚡ 手速加分</span>
+          <span class="feat">📖 答题即学梗</span>
+          <span class="feat">🏆 周榜留名</span>
+        </div>
+      </header>
+
+      <div class="start-card">
+        <div class="mystats">
+          <div class="mystat"><b id="myBest">0</b><span>我的最高分</span></div>
+          <div class="mystat"><b id="myRounds">0</b><span>累计局数</span></div>
+        </div>
+        <button class="btn-main" id="startBtn">开 战！</button>
+        <p class="start-tip">每题 10 秒 · 答对 +100 · 手速加成最多 +50 · 连击最多 +50</p>
+      </div>
+
+      <div class="rank-card">
+        <div class="rank-head">
+          <h2>🏆 本周梗王榜</h2>
+          <button class="btn-mini" id="refreshRankBtn">刷新</button>
+        </div>
+        <ol id="rankList" class="rank-list"></ol>
+        <p class="rank-empty" id="rankEmpty">本周还没有人上榜，第一名就是你？</p>
+      </div>
+    </section>
+
+    <!-- ===== 答题页 ===== -->
+    <section id="playView" hidden>
+      <div class="hud">
+        <div class="hud-score">得分 <b id="hudScore">0</b></div>
+        <div class="hud-combo" id="hudCombo"></div>
+        <div class="hud-count"><b id="hudIdx">1</b>/10</div>
+      </div>
+      <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+      <div class="q-card">
+        <p class="q-tag" id="qTag">AI 圈热梗</p>
+        <h2 class="q-text" id="qText">加载中…</h2>
+        <div class="opts" id="optBox"></div>
+        <p class="key-hint">键盘 1-4 也可以作答</p>
+      </div>
+      <div class="feedback" id="fbBox" hidden>
+        <p class="fb-verdict" id="fbVerdict"></p>
+        <div class="wiki-card">
+          <b>梗百科</b>
+          <p id="fbWiki"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 结算页 ===== -->
+    <section id="resultView" hidden>
+      <div class="result-card">
+        <p class="result-label">本局得分</p>
+        <p class="result-score" id="resScore">0</p>
+        <p class="result-title" id="resTitle">梗新兵</p>
+        <div class="result-stats">
+          <div><b id="resCorrect">0/10</b><span>正确</span></div>
+          <div><b id="resCombo">0</b><span>最高连击</span></div>
+          <div><b id="resBest">0</b><span>历史最高</span></div>
+        </div>
+        <div class="rank-submit" id="rankSubmitBox">
+          <input id="nameInput" maxlength="8" placeholder="留下你的名号（8 字内）">
+          <button class="btn-main btn-sm2" id="submitRankBtn">上榜！</button>
+        </div>
+        <p class="rank-done" id="rankDone" hidden>🏆 已上榜！本周榜单见</p>
+        <div class="result-acts">
+          <button class="btn-main" id="againBtn">再来一局</button>
+          <button class="btn-ghost" id="homeBtn">回首页</button>
+        </div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-head"><h2>🏆 本周梗王榜</h2></div>
+        <ol id="rankList2" class="rank-list"></ol>
+      </div>
+    </section>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

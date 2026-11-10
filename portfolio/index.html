@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>王安顺 · 前端开发 · 作品集</title>
+<meta name="description" content="前端开发（2027 届）。WebGL 流体求解、程序化骨骼与约束求解、低代码表单引擎与异步任务管线，三个从零做起的项目。">
+<meta name="theme-color" content="#07080c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307080c'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23f0c674'/%3E%3Ccircle cx='32' cy='32' r='20' fill='none' stroke='%23f0c674' stroke-opacity='0.35' stroke-width='2'/%3E%3C/svg%3E">
+<!-- 分享卡片：og:image 必须是绝对地址，部署到正式域名后把下面这条换成 https://你的域名/og.jpg -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="王安顺 · 前端开发 · 作品集">
+<meta property="og:description" content="把流体、骨骼与三维做成真正能跑的东西。">
+<meta property="og:image" content="og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root {
+    /* 设计基准 1440×900：JS 按视口算出 --k，整页等比缩放 */
+    --k: 1;
+    --shell: 1720px;   /* 居中最宽容器：文字和龙都对齐到它 */
+    --pad: 64px;      /* 容器内边距 */
+    --art-ratio: 2.337;   /* 龙画布宽高比 = 素材帧 960×411 */
+    --art-w-px: 900px;   /* 由 layout() 覆写 */
+    --art-cy: 540px;
+    --art-lift: 0px;   /* 文字淡出时把龙上提，补回视觉重心 */     /* 龙盒中心的 y（px），由 layout() 覆写 */
+    --bg: #07080c;
+    --ink: #eef2f7;
+    --dim: #8b97ab;
+    --gold: #f0c674;
+    --rose: #ff7f6e;
+    --line: rgba(255, 255, 255, 0.09);
+    --glass: rgba(16, 20, 30, 0.55);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ── 3D 画布：固定在最底 ── */
+  /* 流体背景（iframe 垫底） */
+  #fluid {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    border: 0; z-index: 0; opacity: 0.55;
+    filter: brightness(0.62) saturate(1.15) contrast(1.06);
+    /* 不要让 iframe 吃掉指针事件：它一旦命中，父页面的 pointermove 就再也不触发，
+       龙珠便永远追不上鼠标。指针由父页面收下，再用 postMessage 式的原生事件转发进 iframe。 */
+    pointer-events: none;
+  }
+  /* ── 视觉区规格（钉死，不用百分比拉伸）──
+     宽度上限 1180、高度上限 820：超宽/超高的窗口里龙不会跟着无限放大。
+     定位用 margin 而不是 transform —— transform 留给 JS 做鼠标跟随。 */
+  #gl {
+    position: fixed;
+    /* 尺寸与竖直位置由 layout() 量出：--art-w-px / --art-cy（见 :root） */
+    left: 50%;
+    top: calc(var(--art-cy, 50%) - var(--art-lift, 0px));
+    width: var(--art-w-px, min(86vw, 1560px));
+    height: calc(var(--art-w-px, min(86vw, 1560px)) / 2.337);
+    margin-left: calc(var(--art-w-px, min(86vw, 1560px)) / -2);
+    margin-top: calc(var(--art-w-px, min(86vw, 1560px)) / 2.337 / -2);
+    z-index: 3; display: block; pointer-events: none;   /* 提到 .veil 之上，不再被左侧渐变压灰 */
+    transition: opacity 0.18s linear;
+    /* 曝光压低后靠饱和度/对比补回"浓"，和视频帧的调子对齐 */
+    filter: saturate(1.28) contrast(1.07);
+  }
+
+  /* ── 氛围层 ── */
+  .veil {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;   /* 在 #gl 之上、#seq 之下 */
+    background:
+      radial-gradient(120% 80% at 62% 42%, rgba(255, 140, 90, 0.10), transparent 60%),
+      radial-gradient(90% 60% at 20% 80%, rgba(90, 160, 255, 0.08), transparent 65%),
+      radial-gradient(140% 120% at 50% 50%, transparent 42%, rgba(4, 5, 9, 0.90) 100%),
+      linear-gradient(90deg, rgba(5,6,10,0.94) 0%, rgba(5,6,10,0.62) 36%, rgba(5,6,10,0.18) 66%, transparent 100%);
+  }
+  .grain {
+    position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ── 内容层 ── */
+  /* 内容层默认「穿透」指针事件 —— 否则整屏的 hero 会把鼠标记住，
+     下面 iframe 里的流体就永远收不到 pointermove。
+     只有真正需要交互的元素再单独打开。 */
+  .wrap { position: relative; z-index: 5; pointer-events: none; }
+  /* 文案容器必须放开指针：父级 pointer-events:none 会让正文无法划选、无法复制。
+     hero-inner / footer 只占部分屏幕，其余区域照旧把指针让给背景流体。 */
+  .wrap a, .wrap button, .wrap .card, .wrap .stat,
+  .wrap .hero-inner, .wrap footer { pointer-events: auto; }
+
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 40px; z-index: 30;
+    backdrop-filter: blur(14px);
+    background: linear-gradient(to bottom, rgba(7, 8, 12, 0.8), rgba(7, 8, 12, 0));
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.14em; font-size: 13px; }
+  .brand .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 14px var(--gold); }
+  nav ul { display: flex; gap: 28px; list-style: none; }
+  nav a { color: var(--dim); text-decoration: none; font-size: 13px; letter-spacing: 0.06em; transition: color 0.25s; }
+  nav a:hover { color: var(--ink); }
+
+  /* ── Hero ── */
+  /* 文字块整体靠上（按钮和文字绑定），龙占下方 */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: calc(120px * var(--k)) 40px calc(30px * var(--k))
+             max(var(--pad), calc((100vw - var(--shell)) / 2 + var(--pad)));
+  }
+  .hero .cta-row { margin-top: calc(34px * var(--k)); }
+  .hero-inner { max-width: calc(560px * var(--k)); }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; letter-spacing: 0.22em; color: var(--gold);
+    border: 1px solid rgba(240, 198, 116, 0.28);
+    padding: 6px 12px; border-radius: 999px; margin-bottom: 26px;
+    background: rgba(240, 198, 116, 0.06);
+  }
+  h1 {
+    font-size: clamp(26px, calc(62px * var(--k)), 68px);
+    line-height: 1.14; letter-spacing: -0.02em; font-weight: 800;
+    margin-bottom: 22px;
+  }
+  h1 .hl {
+    background: linear-gradient(100deg, #ffd79a 0%, #ff9b7a 45%, #ffd79a 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .lede { font-size: clamp(13px, calc(16.5px * var(--k)), 18px); line-height: 1.85; color: var(--dim); margin-bottom: 34px; max-width: 480px; }
+  .lede b { color: #cdd7e5; font-weight: 600; }
+
+  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 13px 24px; border-radius: 11px; font-size: 14px; font-weight: 600;
+    text-decoration: none; letter-spacing: 0.02em;
+    transition: transform 0.2s, box-shadow 0.25s, background 0.25s, border-color 0.25s;
+  }
+  .btn-primary { background: linear-gradient(135deg, #ffcf8e, #f0965f); color: #241206; box-shadow: 0 10px 34px rgba(240, 150, 95, 0.25); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 44px rgba(240, 150, 95, 0.38); }
+  .btn-ghost { border: 1px solid var(--line); color: #c3cddb; background: var(--glass); backdrop-filter: blur(10px); }
+  .btn-ghost:hover { border-color: rgba(240, 198, 116, 0.5); color: var(--ink); transform: translateY(-2px); }
+
+  .hint {
+    position: absolute; right: max(var(--pad), calc((100vw - var(--shell)) / 2 + var(--pad))); bottom: calc(26px * var(--k));
+    font-size: 11px; letter-spacing: 0.2em; color: #5b6a80;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .hint .bar { width: 34px; height: 1px; background: linear-gradient(to right, var(--gold), transparent); }
+
+  /* ── 通用 section ── */
+  section.block { padding: 122px clamp(24px, 7vw, 110px); }
+  .sec-head { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 46px; flex-wrap: wrap; }
+  .sec-head h2 { font-size: clamp(24px, 2.6vw, 36px); letter-spacing: -0.01em; font-weight: 800; }
+  .sec-head p { color: var(--dim); font-size: 13.5px; max-width: 420px; line-height: 1.8; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; }
+  .card {
+    position: relative; padding: 28px 26px 26px;
+    border: 1px solid var(--line); border-radius: 16px;
+    background: linear-gradient(160deg, rgba(24, 29, 41, 0.9), rgba(12, 15, 22, 0.82));
+    backdrop-filter: blur(12px);
+    overflow: hidden;
+    transition: opacity 0.7s cubic-bezier(.2,.7,.2,1), transform 0.7s cubic-bezier(.2,.7,.2,1), border-color 0.3s;
+  }
+  /* 只有确认入场动画能跑（脚本给 html 加了 .js-reveal）时，才先把卡片藏起来。
+     这样 3D 模块整个挂掉时（无 WebGL / 不支持 importmap），卡片默认仍然可见。 */
+  .js-reveal .card { opacity: 0; transform: translateY(26px); }
+  .js-reveal .card.in { opacity: 1; transform: none; }
+  .card:hover { border-color: rgba(240, 198, 116, 0.35); }
+  .card::before {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(120% 80% at 85% 0%, rgba(255, 160, 100, 0.13), transparent 55%);
+    opacity: 0; transition: opacity 0.35s; pointer-events: none;
+  }
+  .card:hover::before { opacity: 1; }
+  .card .idx { font-size: 11px; letter-spacing: 0.24em; color: rgba(240, 198, 116, 0.7); }
+  .card h3 { font-size: 20px; margin: 14px 0 10px; letter-spacing: -0.01em; }
+  .card p { color: var(--dim); font-size: 13.5px; line-height: 1.8; min-height: 76px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 7px; margin: 16px 0 20px; }
+  .tag { font-size: 11px; padding: 4px 9px; border-radius: 6px; color: #9fb0c8; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.06); }
+  .card .go { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--gold); text-decoration: none; font-weight: 600; }
+  .card .go span { transition: transform 0.25s; }
+  .card .go:hover span { transform: translateX(4px); }
+
+  /* ── 数据栏 ── */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .stat { padding: 30px 24px; background: rgba(10, 13, 19, 0.92); }
+  .stat b { display: block; font-size: clamp(26px, 3vw, 40px); font-weight: 800; letter-spacing: -0.02em;
+            background: linear-gradient(120deg, #ffe0b0, #ff9c78); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .stat span { display: block; margin-top: 8px; font-size: 12px; color: var(--dim); letter-spacing: 0.1em; }
+
+  /* ── 页脚 ── */
+  footer {
+    padding: 60px clamp(24px, 7vw, 110px) 54px;
+    border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; gap: 26px; flex-wrap: wrap;
+    font-size: 13px; color: var(--dim);
+  }
+  footer a { color: #b8c4d6; text-decoration: none; }
+  footer a:hover { color: var(--gold); }
+  .fw { display: flex; gap: 22px; flex-wrap: wrap; }
+
+  /* ── 滚动叙事区 ── */
+  .story { height: 140vh; position: relative; }
+  .story-caption {
+    position: fixed; left: clamp(24px, 7vw, 110px); bottom: 16vh;
+    transform: none;
+    font-size: clamp(22px, 3vw, 40px); font-weight: 800; letter-spacing: 0.28em;
+    color: rgba(255, 240, 220, 0.92);
+    text-shadow: 0 0 40px rgba(255, 170, 90, 0.55), 0 6px 60px rgba(0, 0, 0, 0.9);
+    opacity: 0; pointer-events: none; z-index: 5;
+    will-change: opacity, transform;
+    white-space: nowrap;
+  }
+  .story-caption span { color: var(--gold); margin: 0 0.12em; }
+
+  /* ── 龙珠（DOM，永远在最上层，1:1 贴光标） ── */
+  #pearl {
+    position: fixed; left: 0; top: 0; width: 30px; height: 30px;
+    margin: 0; border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, #fffdf4 0%, #ffe9b0 28%, #ffc45e 58%, #ff9a3c 78%, rgba(255,140,40,0) 100%);
+    box-shadow:
+      0 0 14px 5px rgba(255, 190, 90, 0.85),
+      0 0 46px 18px rgba(255, 150, 60, 0.42),
+      0 0 110px 46px rgba(255, 130, 40, 0.18);
+    pointer-events: none; z-index: 26;
+    opacity: 0; transform: translate(-50%, -50%);
+    will-change: transform, opacity;
+  }
+  #pearl::after {
+    content: ""; position: absolute; inset: -18px; border-radius: 50%;
+    border: 1px solid rgba(255, 210, 130, 0.35);
+    animation: pearlPulse 2.4s ease-out infinite;
+  }
+  @keyframes pearlPulse {
+    0%   { transform: scale(0.75); opacity: 0.85; }
+    100% { transform: scale(1.55); opacity: 0; }
+  }
+
+  /* ── 序列帧层（滚动 scrub，视频抽帧） ── */
+  #seq {
+    position: fixed;
+    /* 尺寸与竖直位置由 layout() 量出：--art-w-px / --art-cy（见 :root） */
+    left: 50%;
+    top: calc(var(--art-cy, 50%) - var(--art-lift, 0px));
+    width: var(--art-w-px, min(86vw, 1560px));
+    height: calc(var(--art-w-px, min(86vw, 1560px)) / 2.337);
+    margin-left: calc(var(--art-w-px, min(86vw, 1560px)) / -2);
+    margin-top: calc(var(--art-w-px, min(86vw, 1560px)) / 2.337 / -2);
+    z-index: 3; display: none; opacity: 0;
+    pointer-events: none;
+    will-change: opacity, transform;
+    /* 在 veil 之上：龙转动时"突破"进来，不会被压暗 */
+  }
+  @media (max-width: 860px) {
+    #gl, #seq {
+      --art-w-px: min(100vw, calc(58vh * 2.337));
+      left: 50%; right: auto;
+      width: var(--art-w-px);
+      height: calc(var(--art-w-px) / 2.337);
+      margin-left: calc(var(--art-w-px) / -2);
+      top: 54%; bottom: auto;
+      margin-top: calc(var(--art-w-px) / 2.337 / -2);
+    }
+  }
+
+
+  /* ── 龙层：整窗透明叠加，让 fx 按它自己的基准画（比例才不会被压扁）── */
+  #dragonFrame {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 4; display: none; opacity: 0;
+    border: 0; background: transparent;
+    pointer-events: none; will-change: opacity;
+    color-scheme: dark;
+  }
+
+  /* ── 切换闪光：用一瞬金光掩盖"模型↔视频"的风格差 ── */
+  #flash {
+    position: fixed; inset: 0; z-index: 6; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 46%,
+      rgba(255, 236, 200, 0.95) 0%,
+      rgba(255, 196, 110, 0.72) 26%,
+      rgba(255, 150, 70, 0.30) 48%,
+      rgba(255, 130, 50, 0) 72%);
+  }
+
+  .load-err {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    z-index: 30; display: none; padding: 10px 16px; border-radius: 10px;
+    background: rgba(60, 12, 12, 0.92); border: 1px solid #ff6b6b55;
+    color: #ffb4b4; font-size: 12px; font-family: ui-monospace, monospace;
+  }
+
+  @media (max-width: 860px) {
+    /* 手机上龙要待在上半屏，文字压在底部的暗区里 —— 否则鳞片会糊在正文上 */
+
+    .veil {
+      background:
+        radial-gradient(80% 55% at 58% 28%, rgba(255, 140, 90, 0.10), transparent 62%),
+        linear-gradient(to bottom,
+          rgba(5, 6, 10, 0.18) 0%,
+          rgba(5, 6, 10, 0.42) 34%,
+          rgba(5, 6, 10, 0.88) 58%,
+          rgba(5, 6, 10, 0.97) 82%,
+          rgba(5, 6, 10, 1) 100%);
+    }
+    /* 以前这里直接把 nav ul 藏掉，手机上就完全没有导航了 */
+    nav { padding: 14px 20px; }
+    nav ul { gap: 16px; }
+    nav a { font-size: 12px; letter-spacing: 0.04em; }
+    .brand { font-size: 11px; letter-spacing: 0.1em; }
+    .hero { align-items: flex-end; padding-bottom: 90px; }
+    .hero-inner { max-width: 100%; }
+  }
+  @media (max-width: 430px) {
+    nav ul { gap: 12px; }
+    nav ul li:last-child { display: none; }   /* 「流光宇宙 ↗」在小屏让位给三个锚点 */
+    .hint { display: none; }
+  }
+
+  /* 系统开了「减少动态效果」时，所有自动播放的过渡 / 动画停掉 */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .card { transition: none; }
+    .js-reveal .card { opacity: 1; transform: none; }
+    .story-caption { transition: none; }
+    #pearl::after { animation: none; }
+    .btn, nav a, .card .go span { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<iframe id="fluid" src="../fx/?bg=1&v=4" title="流体背景" loading="eager"></iframe>
+<canvas id="gl"></canvas>
+<canvas id="seq"></canvas>
+<iframe id="dragonFrame" src="../fx/?dragon=1" title="" loading="lazy" style="border:0;background:transparent"></iframe>
+<div class="veil"></div>
+<div class="grain"></div>
+<div id="pearl"></div>
+<div id="flash"></div>
+
+<nav>
+  <div class="brand"><span class="dot"></span> WANG ANSHUN</div>
+  <ul>
+    <li><a href="#work">作品</a></li>
+    <li><a href="#stack">技术</a></li>
+    <li><a href="#contact">联系</a></li>
+    <li><a href="../fx/" target="_blank">流光宇宙 ↗</a></li>
+  </ul>
+</nav>
+
+<div class="wrap">
+
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">前端开发 · 2027 届 · 南宁</div>
+      <h1>
+        把流体、骨骼与三维<br>
+        做成<span class="hl">真正能跑</span>的东西
+      </h1>
+      <p class="lede">
+        Vue 3 + TypeScript 做工程，WebGL 与 Canvas 做视觉。
+        写过 <b>GPU 流体求解器</b>、<b>程序化骨骼链条</b>、<b>约束求解</b>，
+        也做过 <b>低代码表单引擎</b> 和 <b>异步任务管线</b>。
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#work">查看作品 <span>→</span></a>
+        <a class="btn btn-ghost" href="../fx/" target="_blank">打开流光宇宙</a>
+      </div>
+    </div>
+    <div class="hint"><span class="bar"></span> 拖动鼠标与龙互动 · 向下滚动</div>
+  </section>
+
+    <div class="story" id="story">
+    <div class="story-caption" id="cap1">龙<span>·</span>回眸</div>
+    <div class="story-caption" id="cap2">龙珠引龙</div>
+    <div class="story-caption" id="cap3">随珠而动</div>
+  </div>
+
+<section class="block" id="work">
+    <div class="sec-head">
+      <h2>作品</h2>
+      <p>三个从零做起的项目，覆盖视觉、工程与数据三条线。</p>
+    </div>
+    <div class="cards">
+
+      <article class="card">
+        <div class="idx">01 / 视觉</div>
+        <h3>流光宇宙</h3>
+        <p>基于 GPU stable-fluids 的实时流体画布，含 Shader 编译管线、FBO 双缓冲与 Canvas2D 降级路径；叠加程序化神龙骨架与约束求解。</p>
+        <div class="tags"><span class="tag">WebGL</span><span class="tag">GLSL</span><span class="tag">Canvas 2D</span><span class="tag">Verlet</span></div>
+        <a class="go" href="../fx/" target="_blank">进入体验 <span>→</span></a>
+      </article>
+
+      <article class="card">
+        <div class="idx">02 / 工程</div>
+        <h3>表情包工厂</h3>
+        <p>AI 表情包量产工具。Node 原生 http 服务 + 6 个 REST 接口，异步任务队列配轮询，前端用 AbortSignal 管理请求生命周期。</p>
+        <div class="tags"><span class="tag">Node.js</span><span class="tag">REST</span><span class="tag">异步轮询</span><span class="tag">Canvas</span></div>
+        <a class="go" href="../" target="_blank">进入体验 <span>→</span></a>
+      </article>
+
+      <article class="card">
+        <div class="idx">03 / 数据</div>
+        <h3>低代码表单搭建器</h3>
+        <p>Schema 驱动的表单引擎：递归 <code>FieldRenderer</code> 渲染任意嵌套结构，<code>defineModel</code> 双向绑定，TS 类型贯穿 schema → 校验 → 提交。</p>
+        <div class="tags"><span class="tag">Vue 3</span><span class="tag">TypeScript</span><span class="tag">Pinia</span><span class="tag">递归组件</span></div>
+        <a class="go" href="#contact">查看源码 <span>→</span></a>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="block" id="stack">
+    <div class="sec-head">
+      <h2>技术</h2>
+      <p>这些数字都是仓库里真实存在的，不是估算。</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="stat1">—</b><span>3D 三角面（实时）</span></div>
+      <div class="stat"><b>6</b><span>REST 接口</span></div>
+      <div class="stat"><b>3</b><span>GPU / CPU 渲染路径</span></div>
+      <div class="stat"><b>1</b><span>页简历 · A4</span></div>
+    </div>
+  </section>
+
+  <footer id="contact">
+    <div>
+      <div style="color:#e7edf6;font-weight:700;margin-bottom:8px;">王安顺 · 前端开发实习生</div>
+      <div>求职方向：前端开发（2027 届）</div>
+    </div>
+    <div class="fw">
+      <a href="tel:19377481748">19377481748</a>
+      <a href="mailto:3116830377@qq.com">3116830377@qq.com</a>
+      <a href="https://github.com/Wangansll" target="_blank">github.com/Wangansll</a>
+    </div>
+  </footer>
+
+</div>
+
+<div class="load-err" id="err"></div>
+
+<script>
+/* 卡片入场 · 与 three.js 完全无关。
+   故意放在模块脚本之前、用普通 script：即使 WebGL 不可用、浏览器不支持 importmap、
+   或模型加载抛错导致下面那个 type="module" 整体不执行，卡片也必须照常出现。 */
+(function () {
+  var cards = document.querySelectorAll(".card");
+  if (!cards.length || !("IntersectionObserver" in window)) return;   // 不支持就保持 CSS 默认可见
+  document.documentElement.classList.add("js-reveal");
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in");
+      io.unobserve(e.target);
+    });
+  }, { threshold: 0.16 });
+  Array.prototype.forEach.call(cards, function (card, i) {
+    var delay = i * 90;
+    card.style.transitionDelay = delay + "ms";
+    // 入场结束后清掉延迟，否则 hover 的 border-color 也要等 90/180ms 才变色
+    card.addEventListener("transitionend", function done(e) {
+      if (e.propertyName !== "opacity") return;
+      card.style.transitionDelay = "0ms";
+      card.removeEventListener("transitionend", done);
+    });
+    io.observe(card);
+  });
+})();
+</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "../fx/vendor/three.module.min.js",
+    "three/addons/": "../fx/vendor/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+const errEl = document.getElementById("err");
+const showErr = t => { errEl.style.display = "block"; errEl.textContent = t; };
+window.addEventListener("error", e => showErr("JS: " + (e.message || e.error)));
+
+const bgFrameEl = document.getElementById("fluid");
+const bgWin = bgFrameEl ? bgFrameEl.contentWindow : null;
+let bgPaused = false;
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const lerp = (a, b, t) => a + (b - a) * t;
+
+// ───────── 渲染器 ─────────
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("gl"), antialias: true, alpha: true });
+} catch (e) { showErr("WebGL 不可用：" + e.message); throw e; }
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const canvasEl = document.getElementById("gl");
+const glEl = canvasEl;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
+// 设计基准：1440×900。整页按 k 等比缩放，窗口/全屏只是倍数不同
+const DESIGN_W = 1440, DESIGN_H = 900;
+function applyDesignScale() {
+  // 以「容器宽度」而不是视口宽度为基准：超宽屏上容器封顶 1680，
+  // 内容就封顶在 k≈1.17，不会一边被拉开一边留空。
+  const SHELL = 1680;
+  const shellW = Math.min(innerWidth, SHELL);
+  const k = Math.max(0.58, Math.min(1.75, Math.min(shellW / DESIGN_W, innerHeight / DESIGN_H)));
+  document.documentElement.style.setProperty("--k", k.toFixed(4));
+  window.__K = k;
+}
+
+// ── 画布内部尺寸写死 ──
+//    盒子大小交给 CSS（1180×820 × --k）等比缩放，
+//    内部始终渲染同一个分辨率 → 构图、龙的占比、模型与视频的比例
+//    在任何窗口尺寸下都完全一致，这才是真正可预期的"响应式"。
+// 内部画布必须和 CSS 盒子的宽高比一致，否则视频/3D 会被拉伸
+const ART_W = 1400, ART_H = 599;      // 1400 / 599 = 2.337，等于素材帧 960×411
+const ART_RATIO = ART_W / ART_H;      // layout() 算龙宽用
+const ART_DPR = Math.min(1.5, Math.max(1, devicePixelRatio || 1));
+const ART_PX_W = Math.round(ART_W * ART_DPR);
+const ART_PX_H = Math.round(ART_H * ART_DPR);
+
+// 显示尺寸 → 位图尺寸（× dpr，上限 2）
+// 位图必须跟显示尺寸同量级，否则浏览器放大会糊
+function artBitmapSize(cssW) {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.max(320, Math.round((cssW || ART_W) * dpr));
+  return { w, h: Math.round(w / ART_RATIO) };
+}
+
+function fitCanvas() {
+  const cssW = canvasEl.clientWidth || ART_W;
+  const { w, h } = artBitmapSize(cssW);
+  renderer.setSize(w, h, false);
+  camera.aspect = ART_RATIO;      // 宽高比恒定，构图不受位图尺寸影响
+  camera.updateProjectionMatrix();
+  window.__glPx = w + "x" + h;
+}
+
+// ───────── 灯光 ─────────
+scene.add(new THREE.HemisphereLight(0xbcd4f0, 0x1a0f0a, 1.15));
+const key = new THREE.DirectionalLight(0xfff0dd, 4.8); key.position.set(-1.2, 1.3, 1.6); scene.add(key);
+const rim = new THREE.DirectionalLight(0x74ccff, 3.7); rim.position.set(1.4, -0.2, -1.3); scene.add(rim);
+const fill = new THREE.DirectionalLight(0xff8a5a, 2.3); fill.position.set(0.7, 0.4, 1.2); scene.add(fill);
+
+// 控制台可调：LOOK.exposure = 1.5 立刻生效，用于和视频帧亮度对齐
+window.LOOK = { exposure: 1.08, modelScale: 0.93 };   // 按截图实测校准：模型/视频 等宽   // modelScale：模型整体缩放，用来和视频帧对齐大小
+renderer.toneMappingExposure = window.LOOK.exposure;
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+const es = new THREE.Scene(); es.background = new THREE.Color(0x1a2233);
+scene.environment = pmrem.fromScene(es, 0.05).texture;
+
+// ───────── 龙 ─────────
+const root = new THREE.Group();       // 用来整体旋转/位移
+scene.add(root);
+let model = null, baseDist = 2.6, maxDim = 1;
+let trisTotal = 0;
+let dragonMat = null;                 // 用来把 3D 龙淡出，交给 2D 盘龙
+
+// ───────── 龙珠 ─────────
+const pearlLight = new THREE.PointLight(0xffc46a, 0, 6, 2);
+scene.add(pearlLight);
+
+// ───────── 载入模型 ─────────
+const swim = { uTime: { value: 0 }, uAmp: { value: 0.004 }, uFreq: { value: 6.2 }, uSpeed: { value: 2.4 }, uInk: { value: 0 } };
+
+new GLTFLoader().load(
+  "../fx/parts3d/model_full_web.glb",
+  gltf => {
+    model = gltf.scene;
+
+    // 取出骨架：后面每帧驱动它做弯曲
+    model.traverse(o => {
+      if (o.isSkinnedMesh && !skinnedMesh) {
+        skinnedMesh = o;
+        skelBones = o.skeleton.bones.slice();
+        skelBase = skelBones.map(b => b.quaternion.clone());
+      }
+    });
+
+    // 只按「网格」算包围盒：加了骨骼后 setFromObject 会把骨架也算进去，导致尺寸失控
+    const box = new THREE.Box3();
+    model.traverse(o => {
+      if (o.isMesh && o.geometry) {
+        o.geometry.computeBoundingBox();
+        const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+        box.union(b);
+      }
+    });
+    if (box.isEmpty()) box.setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    model.position.sub(center);
+
+    maxDim = Math.max(size.x, size.y, size.z);
+    baseDist = maxDim * 1.55;
+    camera.near = maxDim * 0.002;
+    camera.far = maxDim * 120;
+    camera.updateProjectionMatrix();
+
+    // 龙珠已改为 DOM 元素，这里不再设置 3D 尺寸
+
+    // 顶点行波：不需要骨骼也能游
+    model.traverse(o => {
+      if (!o.isMesh || !o.geometry) return;
+      const g = o.geometry;
+      g.computeBoundingBox();
+      const bb = g.boundingBox;
+      const ext = new THREE.Vector3().subVectors(bb.max, bb.min);
+      const axisIdx = ext.x >= ext.y && ext.x >= ext.z ? 0 : (ext.y >= ext.z ? 1 : 2);
+      const sideIdx = ext.x <= ext.y && ext.x <= ext.z ? 0 : (ext.y <= ext.z ? 1 : 2);
+      const axis = new THREE.Vector3(axisIdx === 0 ? 1 : 0, axisIdx === 1 ? 1 : 0, axisIdx === 2 ? 1 : 0);
+      const side = new THREE.Vector3(sideIdx === 0 ? 1 : 0, sideIdx === 1 ? 1 : 0, sideIdx === 2 ? 1 : 0);
+      const minV = new THREE.Vector3(bb.min.x, bb.min.y, bb.min.z);
+      const span = Math.max(1e-6, ext.getComponent(axisIdx));
+
+      const mat = o.material;
+      // 允许把 3D 龙整体淡出（只有这一个 mesh，透明排序没有代价）
+      mat.transparent = true;
+      dragonMat = mat;
+      mat.onBeforeCompile = sh => {
+        sh.uniforms.uTime = swim.uTime; sh.uniforms.uAmp = swim.uAmp;
+        sh.uniforms.uFreq = swim.uFreq; sh.uniforms.uSpeed = swim.uSpeed;
+        sh.uniforms.uInk = swim.uInk;
+        sh.uniforms.uAxis = { value: axis }; sh.uniforms.uSide = { value: side };
+        sh.uniforms.uMin = { value: minV }; sh.uniforms.uSpan = { value: span };
+        sh.vertexShader = sh.vertexShader
+          .replace("#include <common>", `#include <common>
+            uniform float uTime; uniform float uAmp; uniform float uFreq; uniform float uSpeed;
+            uniform vec3 uAxis; uniform vec3 uSide; uniform vec3 uMin; uniform float uSpan;
+            varying vec3 vInkView;`)
+          .replace("#include <begin_vertex>", `#include <begin_vertex>
+            float tx = clamp(dot(position - uMin, uAxis) / uSpan, 0.0, 1.0);
+            float taper = 0.10 + 1.15 * tx;
+            float ph = tx * uFreq - uTime * uSpeed;
+            transformed += uSide * (sin(ph) * uAmp * taper);
+            transformed += vec3(0.0, 1.0, 0.0) * (cos(ph * 1.13) * uAmp * 0.30 * taper);`)
+          .replace("#include <project_vertex>", `#include <project_vertex>
+            vInkView = -mvPosition.xyz;`);
+
+        // ── 2D 线稿层 ─────────────────────────────────────────────
+        // 同一个 mesh、同一个相机：法线突变当折线、深度断层当轮廓，
+        // 用 dFdx/dFdy 在片元里现算，所以和 3D 永远逐像素对齐，不存在"错位"。
+        sh.fragmentShader = sh.fragmentShader
+          .replace("#include <common>", `#include <common>
+            uniform float uInk; uniform float uTime; varying vec3 vInkView;`)
+          .replace("#include <dithering_fragment>", `#include <dithering_fragment>
+            if (uInk > 0.001) {
+              vec3 nrm = normalize(vNormal);
+              float dN = length(dFdx(nrm)) + length(dFdy(nrm));
+              float dZ = (abs(dFdx(vInkView.z)) + abs(dFdy(vInkView.z))) / max(0.4, vInkView.z);
+              float raw = dN * 1.10 + dZ * 34.0;
+              // 手抖：阈值随屏幕位置和时间轻微扰动，线就不会像 CAD 描边
+              float jit = sin(gl_FragCoord.y * 1.27 + 0.7) * 0.5
+                        + sin(gl_FragCoord.x * 0.81 + 2.3) * 0.5
+                        + sin(uTime * 5.0 + gl_FragCoord.y * 0.045) * 0.6;
+              float line = smoothstep(0.34 + jit * 0.05, 0.66 + jit * 0.05, raw);
+              vec3 inkCol = vec3(0.10, 0.07, 0.05);
+              // 彩绘素描：留住模型本身的色相，只把明暗量化成三档（厚涂的平涂感）
+              vec3 litc = max(gl_FragColor.rgb, vec3(0.02));
+              float lum = dot(litc, vec3(0.299, 0.587, 0.114));
+              float post = 0.36 + 0.22 * step(0.34, lum) + 0.24 * step(0.62, lum);   // 峰值 0.82
+              vec3 tinted = clamp(litc / max(lum, 0.05) * post, 0.0, 1.0);
+              vec3 flat2d = mix(tinted, inkCol, line * 0.88);
+              gl_FragColor.rgb = mix(gl_FragColor.rgb, flat2d, uInk);
+            }`);
+      };
+      mat.needsUpdate = true;
+    });
+
+    model.traverse(o => {
+      if (o.isMesh && o.geometry) {
+        const g = o.geometry;
+        trisTotal += g.index ? g.index.count / 3 : (g.attributes.position ? g.attributes.position.count / 3 : 0);
+      }
+    });
+    const s1 = document.getElementById("stat1");
+    if (s1) s1.textContent = Math.round(trisTotal).toLocaleString();
+
+    root.add(model);
+    fitCanvas();
+  },
+  undefined,
+  err => showErr("模型加载失败 — " + (err && err.message ? err.message : err))
+);
+
+// ───────── 鼠标 ─────────
+let tmx = 0, tmy = 0, mx = 0, my = 0;
+// 指针停在这些地方时，用户需要看见真正的鼠标：龙珠退场、系统光标回来
+const UI_SELECTOR = "nav, a, button, .card, .stat, .hero-inner, footer";
+let overUI = false;
+let cursorHidden = false;
+let mouseSeen = false;      // 触摸屏没有「光标」，龙珠就不该凭空出现在画面中间
+
+// ?mx=0.8&my=-0.4 可模拟光标（调试用）
+const _mq = new URLSearchParams(location.search);
+const _fmx = _mq.has("mx") ? parseFloat(_mq.get("mx")) : null;
+const _fmy = _mq.has("my") ? parseFloat(_mq.get("my")) : null;
+if (_fmx !== null) { tmx = _fmx; mx = _fmx; }
+if (_fmy !== null) { tmy = _fmy; my = _fmy; }
+
+addEventListener("pointermove", e => {
+  curX = e.clientX; curY = e.clientY;
+  // 把光标位置转发给龙 iframe（它本身 pointer-events:none，收不到事件）
+  if (dragonFrame && dragonFrame.style.display === "block") {
+    const r = dragonFrame.getBoundingClientRect();
+    try {
+      dragonFrame.contentWindow.postMessage(
+        { fxPointer: [e.clientX - r.left, e.clientY - r.top] }, "*");
+    } catch (err) {}
+  }
+  tmx = clamp((e.clientX / innerWidth) * 2 - 1, -1, 1);
+  tmy = clamp((e.clientY / innerHeight) * 2 - 1, -1, 1);
+  if (e.pointerType !== "touch") mouseSeen = true;
+  const t = e.target;
+  overUI = !!(t && t.closest && t.closest(UI_SELECTOR));
+}, { passive: true });
+
+// ───────── 把指针转发进背景流体（同源 iframe）─────────
+// 以前是靠 .wrap 上的 pointer-events:none 把事件漏给 iframe，代价是父页面收不到
+// pointermove —— 龙珠永远停在原地。现在反过来：父页面先收事件，再转发一份给流体。
+const fluidFrame = document.getElementById("fluid");
+let fluidWin = null, fluidCanvas = null, lastFwd = 0;
+function bindFluid() {
+  try {
+    fluidWin = fluidFrame.contentWindow;
+    fluidCanvas = fluidFrame.contentDocument && fluidFrame.contentDocument.getElementById("fx");
+  } catch (err) {
+    fluidWin = fluidCanvas = null;   // 源不同就不转发，流体本身还有自动涌动
+  }
+}
+if (fluidFrame) { bindFluid(); fluidFrame.addEventListener("load", bindFluid); }
+
+function forwardToFluid(e) {
+  if (!fluidWin || !fluidCanvas) return;
+  if (e.type === "pointermove") {           // 60Hz 就够，别让转发比渲染还贵
+    const now = performance.now();
+    if (now - lastFwd < 24) return;
+    lastFwd = now;
+  }
+  try {
+    fluidCanvas.dispatchEvent(new fluidWin.PointerEvent(e.type, {
+      clientX: e.clientX, clientY: e.clientY,
+      bubbles: true, cancelable: true,
+      pointerType: e.pointerType || "mouse",
+      pointerId: e.pointerId || 1,
+      isPrimary: true
+    }));
+  } catch (err) { /* 流体挂了也不能影响主页面 */ }
+}
+["pointermove", "pointerdown", "pointerup", "dblclick"].forEach(t =>
+  addEventListener(t, forwardToFluid, { passive: true }));
+
+// ───────── 滚动进度 ─────────
+let P = 0;
+let scrollTotal = 0;
+// 布局量只在 init / resize 时量一次：以前是在 rAF 里每帧读 story.offsetHeight，
+// 而上一帧刚写过 style，等于每帧强制一次同步布局（移动端最明显）。
+function measureScroll() {
+  const story = document.getElementById("story");
+  let total = innerHeight * 2.2;
+  if (story && story.offsetHeight > innerHeight * 0.5) {
+    total = story.offsetTop + story.offsetHeight - innerHeight;
+  }
+  // total ≈ 0 时 P 会瞬间跳到 1（"弹回去、没过程"就是这么来的）→ 兜底
+  scrollTotal = Math.max(innerHeight * 1.2, total);
+  window.__scrollTotal = scrollTotal;
+}
+function readScroll() {
+  if (window.FORCE_P >= 0) { P = window.FORCE_P; window.__P = P; return; }
+  P = scrollTotal > 0 ? clamp(scrollY / scrollTotal, 0, 1) : 0;
+  window.__P = P;   // 控制台核对用
+
+  // 滚完叙事区 → 通知背景 iframe 暂停渲染（省掉整整一条 WebGL 管线）
+  if (bgWin) {
+    const wantPause = P > 0.985;
+    if (wantPause !== bgPaused) {
+      bgPaused = wantPause;
+      try { bgWin.postMessage(wantPause ? "fx-pause" : "fx-resume", "*"); } catch (e) {}
+    }
+  }
+}
+addEventListener("scroll", readScroll, { passive: true });
+
+// ───────── 卡片入场 ─────────
+// 卡片入场已移到页尾的普通 <script>，不依赖 three.js（见该处注释）。
+
+// ───────── 序列帧层（存在则启用，否则静默退回 3D） ─────────
+const seqCanvas = document.getElementById("seq");
+const seqCtx = seqCanvas ? seqCanvas.getContext("2d") : null;
+let seqMeta = null, seqImgs = [], seqReady = 0, seqAspect = 0, seqCanvasSized = false;
+let gameFollow = 0;
+let seqFrac = 0;        // 视频龙占画布宽的比例（drawSeq 实测）
+
+function sizeSeqCanvas() {
+  if (!seqCanvas) return;
+  const cssW = seqCanvas.clientWidth || ART_W;
+  const { w, h } = artBitmapSize(cssW);   // 同样按显示尺寸分配
+  seqCanvas.width = w;
+  seqCanvas.height = h;
+  seqCanvasSized = true;
+  window.__seqPx = w + "x" + h;
+}
+
+if (seqCanvas) {
+  fetch("../fx/parts3d/scroll/meta.json")
+    .then(r => (r.ok ? r.json() : null))
+    .then(m => {
+      if (!m || !m.count) return;
+      seqMeta = m;
+      const pad = n => String(n).padStart(3, "0");
+      const load = (i) => {
+        const img = new Image();
+        img.onload = () => {
+          seqReady++;
+          if (!seqAspect) seqAspect = img.naturalWidth / img.naturalHeight;
+        };
+        img.src = "../fx/parts3d/scroll/" + pad(i + 1) + m.ext;
+        seqImgs[i] = img;
+      };
+      // 优先级：首帧 → 每 6 帧一张（先能滚）→ 其余补满
+      load(0);
+      const coarse = [];
+      for (let i = 6; i < m.count; i += 6) coarse.push(i);
+      coarse.forEach((i, k) => setTimeout(() => load(i), 60 + k * 45));
+      const rest = [];
+      for (let i = 1; i < m.count; i++) if (i % 6 !== 0) rest.push(i);
+      const t0 = 60 + coarse.length * 45;
+      rest.forEach((i, k) => setTimeout(() => load(i), t0 + k * 12));
+      seqCanvas.style.display = "block";
+      sizeSeqCanvas();
+      console.log("[seq] 序列帧已启用:", m.count, "帧", m.ext);
+    })
+    .catch(() => { /* 没有序列帧就用 3D 转动 */ });
+}
+
+// 控制台里直接改：SEQ.scale = 0.6 / SEQ.dx = -0.05 / SEQ.dy = 0.03
+// 改完调用 SEQ.refresh() 立刻重绘，不用滚动
+window.FORCE_P = -1;   // ?P=0.45 可锁定进度（调试用）
+{
+  const m = /[?&]P=([0-9.]+)/.exec(location.search);
+  if (m) window.FORCE_P = Math.max(0, Math.min(1, parseFloat(m[1])));
+}
+window.USE_MODEL = true;    // 主页用 3D 模型，中段交给序列帧，末段回到模型跟鼠标
+window.SEQ = { auto: true, blend: false, zoomFrom: 1.0, zoomTo: 1.34, endAt: 0.72, hFrac: 0.78, scale: 0.99, dx: 0, dy: 0.02, bright:1.16, refresh: () => { drawSeq.last = -1; } };
+let seqCfgKey = "";
+
+function drawSeq(fIdx) {
+  if (!seqCtx || !seqCanvasSized) return;
+  const i0 = Math.floor(fIdx);
+  const frac = fIdx - i0;                       // 小数部分 → 混帧权重
+  let img = seqImgs[i0];
+  let img2 = seqImgs[Math.min(i0 + 1, seqImgs.length - 1)];
+  if (!img || !img.complete || !img.naturalWidth) return;
+  if (!img2 || !img2.complete || !img2.naturalWidth) img2 = null;
+  const W = seqCanvas.width, H = seqCanvas.height;
+
+  // ── 尺度只跟「画布高度」挂钩，不跟宽高比 ──
+  //    3D 用的是透视相机（垂直 FOV 固定）→ 模型高度占比恒定；
+  //    视频如果按 contain 缩放，会被宽高比带着跑，窗口一变两者就不匹配。
+  //    所以这里也用高度定尺度：龙永远占画布高度的 hFrac。
+  // hFrac 缺失（手改配置时容易漏）→ 用默认值，避免 NaN 把整帧画没
+  const hFrac = (typeof SEQ.hFrac === "number" && SEQ.hFrac > 0.01) ? SEQ.hFrac : 0.78;
+  const sc = (typeof SEQ.scale === "number" && SEQ.scale > 0.01) ? SEQ.scale : 1;
+  const cfg = hFrac + "|" + sc + "|" + SEQ.dx + "|" + SEQ.dy + "|" + SEQ.zoomTo;
+
+  // 随着龙扭身逐渐放大：起始 1.0，全部展开时到 zoomTo
+  const pv = seqImgs.length > 1 ? clamp(fIdx / (seqImgs.length - 1), 0, 1) : 0;
+  const zt = clamp((pv - 0.14) / (0.72 - 0.14), 0, 1);
+  const zoom = SEQ.zoomFrom + (SEQ.zoomTo - SEQ.zoomFrom) * (zt * zt * (3 - 2 * zt));
+  let s = (H * hFrac) / img.naturalHeight * sc * zoom;
+  if (!isFinite(s) || s <= 0) {                       // 再兜一层
+    s = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+  }
+  let w = img.naturalWidth * s, h = img.naturalHeight * s;
+  const maxW = W * 1.04;
+  if (w > maxW) { s *= maxW / w; w = img.naturalWidth * s; h = img.naturalHeight * s; }
+
+  seqCtx.clearRect(0, 0, W, H);
+  const dx = (W - w) / 2 + SEQ.dx * W;
+  const dy = (H - h) / 2 + SEQ.dy * H;
+  seqCtx.globalAlpha = 1;
+  seqCtx.drawImage(img, dx, dy, w, h);
+  // 补帧：和下一帧按小数部分叠加 → 90 帧变成连续变化
+  if (img2 && frac > 0.01 && SEQ.blend !== false) {   // 有真插帧时关掉，避免二次模糊
+    const w2 = img2.naturalWidth * s, h2 = img2.naturalHeight * s;
+    seqCtx.globalAlpha = frac;
+    seqCtx.drawImage(img2, (W - w2) / 2 + SEQ.dx * W, (H - h2) / 2 + SEQ.dy * H, w2, h2);
+    seqCtx.globalAlpha = 1;
+  }
+  // 龙在帧里占约 97.8% 宽 → 换算成"占画布宽的比例"，供模型自动对齐
+  seqFrac = (w * 0.978) / W;
+  seqCfgKey = cfg;
+}
+
+// ───────── 主循环 ─────────
+const clock = new THREE.Clock();
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+// 系统开了「减少动态效果」：滚动驱动的转动保留（那是用户自己的操作），
+// 自动呼吸 / 行波 / 漂移全部停掉，避免无来由的画面运动。
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let skinnedMesh = null, skelBones = [], skelBase = [];
+const _segQ = new THREE.Quaternion();
+const _segAxis = new THREE.Vector3(0, 0, 1);
+const _segAxisY = new THREE.Vector3(0, 1, 0);
+const _segQ2 = new THREE.Quaternion();
+let rope = null;      // FTL 链条（屏幕归一化坐标）
+const ROPE_GAIN = 0.85;   // 方向变化 → 骨骼角度的增益
+const ROPE_LIMIT = 0.16;  // 每根骨骼最多转多少弧度（防止网格撕裂）
+let rotY = -0.35;              // 转动惯性状态
+const capEls = [document.getElementById("cap1"), document.getElementById("cap2"), document.getElementById("cap3")];
+const capTargets = [0, 0, 0];
+const capOp = [0, 0, 0];
+let heroFade = 1;
+const pearlEl = document.getElementById("pearl");
+const flashEl = document.getElementById("flash");
+const lightPos = new THREE.Vector3();
+let curX = innerWidth * 0.5, curY = innerHeight * 0.42;
+const heroInner = document.querySelector(".hero-inner");
+let followPos = new THREE.Vector2(0, 0);
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = clock.getDelta();
+  const t = clock.elapsedTime;
+
+  mx += (tmx - mx) * Math.min(1, dt * 3.2);
+  my += (tmy - my) * Math.min(1, dt * 3.2);
+
+  readScroll();
+
+  // ── 序列帧层（视频抽帧）与 3D 层的交接 ──
+  //    P 0.10→0.20 淡入序列帧、3D 淡出；P 0.70→0.80 反向交接
+  //    最后一段 P>0.80 交给 3D：那时它已经盘成正面，可以跟鼠标飞
+  // ── hero 全程用序列帧（一种介质，没有切换，就没有头部跳跃）──
+  //    末段"飞出跟鼠标"用画布的缩放+位移模拟：视觉上和真 3D 跟随难以区分，
+  //    但省掉了"AI 插画 → PBR 渲染"这道必然对不齐的接缝。
+  let dragonA = 0;
+  if (seqMeta) {
+    // 三段严格接力，中间各留 5/1000 的空档：
+    //   模型(含素描态)  0 ── 0.080~0.105 退场
+    //   视频(厚涂)      0.110~0.135 进场 ── 0.690~0.715 退场
+    //   模型             0.720~0.745 进场 ── 1
+    // 两段：开场是模型（陶土→素描），之后全程视频 —— 展开完直接"飞出来"，
+    //       不再切回模型，所以没有第二次材质跳变。
+    let seqIn;
+    if (P < 0.090) {
+      dragonA = window.USE_MODEL ? (1 - smooth(0.075, 0.090, P)) : 0;
+      seqIn = 0;
+    } else {
+      dragonA = 0;
+      // 视频走到停帧点后淡出，把画面交给竹节龙
+      seqIn = 1 - smooth(0.720, 0.790, P);
+    }
+    seqCanvas.style.display = seqIn > 0.001 ? "block" : "none";
+
+    // 停帧之后把画面交给「流光宇宙」里那条已经调好的龙
+    const segIn = 0;   // 暂时关闭：fx iframe 的比例/贴图还没对上，先回到"视频停帧"的稳定态
+    if (dragonFrame) {
+      dragonFrame.style.display = segIn > 0.001 ? "block" : "none";
+      dragonFrame.style.opacity = segIn.toFixed(3);
+    }
+
+    // 到叙事区末尾整层收掉，避免压住「作品」
+    const seqTail = 1 - smooth(0.945, 0.995, P);
+    seqCanvas.style.opacity = (seqIn * seqTail).toFixed(3);
+
+    // ── 彩绘：视频进场时先几乎无色，再慢慢上色 ──
+    //    "视频起始帧的灰"正好被这个去饱和吃掉，不需要单独抠
+    const seqSat = 1.15 + 0.05 * smooth(0.094, 0.125, P);
+    seqCanvas.style.filter =
+      "brightness(" + SEQ.bright + ") saturate(" + seqSat.toFixed(3) + ")";
+
+    // 停帧之后只再缓缓放大一点点（8%）并轻微跟鼠标 —— 收得自然，不是硬冻住。
+    // 之前是 24%，太大；完全不动又太生硬。
+    gameFollow = smooth(0.72, 1.0, P);
+    const px = mx * 20 * gameFollow;
+    const py = -my * 14 * gameFollow;
+    const sc = 1 + gameFollow * 0.08;
+    seqCanvas.style.transform =
+      "translate3d(" + px.toFixed(1) + "px," + py.toFixed(1) + "px,0) scale(" + sc.toFixed(3) + ")";
+
+    // 只播到 endAt 那一帧就停住：再往后 AI 生成的姿态开始崩
+    const maxIdx = (seqMeta.count - 1) * (SEQ.endAt || 1);
+    const fIdx = clamp(P * (seqMeta.count - 1), 0, maxIdx);
+    const cfgNow = SEQ.hFrac + "|" + SEQ.scale + "|" + SEQ.dx + "|" + SEQ.dy;
+    if (Math.abs(fIdx - (drawSeq.last ?? -9)) > 0.02 || cfgNow !== seqCfgKey) {
+      drawSeq(fIdx);
+      drawSeq.last = fIdx;
+    }
+  } else {
+    dragonA = 1;   // 没有序列帧就退回纯 3D
+  }
+
+  if (flashEl) {
+    if (window.USE_MODEL) {
+      const d1 = Math.abs(P - 0.105), d2 = Math.abs(P - 0.720);
+      const w = 0.009;
+      const f = Math.max(0, 1 - Math.min(d1, d2) / w);
+      flashEl.style.opacity = (f * f * 0.20).toFixed(3);   // 只做提示，不做照明
+    } else {
+      flashEl.style.opacity = "0";
+    }
+  }
+
+  // ── 陶土 → 白描 → 厚涂：靠 uInk 把 3D 压成平面色块，材质差被抹平 ──
+  //    白描态没有高光/法线，只有色块，和 AI 厚涂插画在"平"这一点上是一致的，
+  //    所以在这一态完成交接，眼睛看不到"陶土 vs 油画"的跳变。
+  // ── 三段：建模 → 素描 → 视频 ──
+  //    sketch 这一个量同时驱动「去饱和」和「压成平面」：
+  //    素描态 = 没有颜色 + 没有高光，正好是"视频那种厚涂"的共同点，
+  //    交接就放在这一态里，形差一点也看不出来。
+  let sketch;
+  if (P < 0.100) {
+    sketch = smooth(0.046, 0.086, P);                       // 建模 → 素描
+  } else if (P < 0.720) {
+    sketch = 1;                                             // 视频段（模型不可见）
+  } else {
+    sketch = 1 - smooth(0.745, 0.800, P);                   // 素描 → 建模
+  }
+  sketch = Math.max(0, Math.min(1, sketch));
+
+  if (glEl) {
+    glEl.style.filter =
+      // 彩绘素描：保住颜色（只压 30% 饱和）+ 提对比（像勾了线）+ 不提亮
+      "saturate(" + (1.12 - 0.34 * sketch).toFixed(3) + ") " +
+      "contrast(" + (1.07 + 0.10 * sketch).toFixed(3) + ") " +
+      "brightness(" + (0.97 - 0.06 * sketch).toFixed(3) + ")";
+  }
+  if (swim.uInk) swim.uInk.value = sketch;   // 模型不可见时这个值无所谓
+
+  if (dragonMat) dragonMat.opacity = dragonA;
+  if (root) root.visible = dragonA > 0.02;
+
+  // ── 一条连续曲线：sin(P·π) 从 0 升到 1 再回 0，两端导数为零 ──
+  //    这样龙的转动全程不停顿、不跳变，纯粹跟着滚动走
+  const turn = Math.sin(clamp(P, 0, 1) * Math.PI);
+  const pearlOn  = smooth(0.30, 0.46, P) * (1 - smooth(0.72, 0.92, P));
+  const followOn = smooth(0.55, 0.95, P);
+
+  // 目标角度：-0.35(3/4) → +π/2(正对) → 回到 -0.35
+  const targetRotY = -0.35 + turn * (Math.PI / 2 + 0.35);
+  // 惯性缓动：即使滚动是"一格一格"的（鼠标滚轮），转动也是连续的
+  rotY += (targetRotY - rotY) * Math.min(1, dt * 4.5);
+  // 交接窗口里把姿态拽向正面（视频末帧就是正面盘龙），接上之后再放开
+  if (seqMeta) {
+    const snap = smooth(0.680, 0.740, P) * (1 - smooth(0.800, 0.880, P));
+    rotY += (Math.PI / 2 - rotY) * snap * Math.min(1, dt * 6);
+  }
+  // 龙朝龙珠偏头：后段 followOn 越高，头越朝向鼠标那侧
+  const aim = Math.atan2(mx, 1.6) * followOn * 0.55;
+  // 不再整块转身：只用骨骼让身体像绳子一样游
+  root.rotation.y = rotY;
+  root.rotation.z = reduceMotion ? 0 : Math.sin(t * 0.55) * 0.03 * (1 - turn * 0.8);
+  root.rotation.x = reduceMotion ? 0 : Math.sin(t * 0.37) * 0.02;
+
+  // 跟随鼠标：整体位移（越到后面越明显）
+  followPos.x += (mx * maxDim * 0.30 * followOn - followPos.x) * Math.min(1, dt * 3.2);
+  followPos.y += (-my * maxDim * 0.18 * followOn - followPos.y) * Math.min(1, dt * 3.2);
+  root.position.set(followPos.x, followPos.y + (reduceMotion ? 0 : Math.sin(t * 0.7) * maxDim * 0.012), 0);
+
+  // ── 龙珠：DOM 元素（永远在最上层）+ 3D 点光源 ──
+  //    3D 网格会被遮挡/透视缩放，做"光标替身"不可靠；
+  //    DOM 交给浏览器合成，天然在最上面，位置和光标 1:1
+  const pearlShow = smooth(0.42, 0.86, turn) * (1 - smooth(0.96, 1.0, P));
+  // 指针落在导航 / 链接 / 卡片上时，龙珠让位：否则会出现「看不见光标，又不知道该不该点」
+  const pearlDraw = pearlShow * (overUI || !mouseSeen ? 0 : 1);
+  if (pearlEl) {
+    pearlEl.style.opacity = pearlDraw.toFixed(3);
+    pearlEl.style.transform = "translate(" + curX.toFixed(1) + "px," + curY.toFixed(1) + "px) translate(-50%,-50%)";
+  }
+  // 只在状态真的变化时写 style，别每帧都碰 body
+  const hideCursor = pearlDraw > 0.5;
+  if (hideCursor !== cursorHidden) {
+    cursorHidden = hideCursor;
+    document.body.style.cursor = hideCursor ? "none" : "";
+  }
+
+  // 3D 点光源跟着光标走 → 龙鳞被龙珠照亮
+  if (pearlShow > 0.02) {
+    ndc.set(mx, -my);
+    raycaster.setFromCamera(ndc, camera);
+    const d = baseDist * 0.42;
+    lightPos.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, d);
+    pearlLight.position.lerp(lightPos, Math.min(1, dt * 9));
+    pearlLight.intensity = 5.0 * pearlShow;
+    pearlLight.distance = maxDim * 2.2;
+  } else {
+    pearlLight.intensity = 0;
+  }
+
+  // 相机：滚动时轻微拉远；鼠标视差在正面阶段减弱
+  const dist = baseDist * (1 + smooth(0.30, 1, P) * 0.24);
+  const parallax = 1 - turn * 0.65;
+  const yaw = mx * 0.42 * parallax + Math.sin(t * 0.14) * 0.08;
+  const pitch = -my * 0.24 * parallax + 0.06;
+  camera.position.set(
+    Math.sin(yaw) * Math.cos(pitch) * dist,
+    Math.sin(pitch) * dist + baseDist * 0.06,
+    Math.cos(yaw) * Math.cos(pitch) * dist
+  );
+  camera.lookAt(0, 0, 0);
+
+  // ── 字幕：目标是滚动算的，实际值用时间缓动追过去 ──
+  //    直接写 opacity 会在滚轮一格一格跳的时候跟着抖；
+  //    加 dt 缓动后，即使 scrollY 突变，文字也是"滑"进去的
+  capTargets[0] = smooth(0.12, 0.24, P) * (1 - smooth(0.36, 0.46, P));
+  capTargets[1] = smooth(0.40, 0.52, P) * (1 - smooth(0.62, 0.72, P));
+  capTargets[2] = smooth(0.72, 0.84, P) * (1 - smooth(0.94, 1.00, P));
+  for (let i = 0; i < 3; i++) {
+    capOp[i] += (capTargets[i] - capOp[i]) * Math.min(1, dt * 5.5);
+    const el = capEls[i];
+    if (!el) continue;
+    const o = capOp[i];
+    el.style.opacity = o.toFixed(3);
+    // 淡入时从下方 26px 浮上来，淡出时继续往上飘 —— 有运动感，不是闪烁
+    el.style.transform =
+      "translateY(" + ((1 - o) * 22).toFixed(1) + "px)";
+  }
+
+  // hero 内容随滚动淡出
+  // 文字淡出 → 视觉重心下坠，把龙等量上提补回来（最多 6% 视口高）
+  if (heroInner) {
+    const lift = (1 - heroFade) * innerHeight * 0.06;
+    document.documentElement.style.setProperty("--art-lift", lift.toFixed(1) + "px");
+  }
+  if (heroInner) {
+    const fadeT = 1 - smooth(0.02, 0.22, P);
+    heroFade += (fadeT - heroFade) * Math.min(1, dt * 6);
+    heroInner.style.opacity = heroFade.toFixed(3);
+    heroInner.style.transform = "translateY(" + (-(1 - heroFade) * 40).toFixed(1) + "px)";
+  }
+
+  // 「白描→设色」那一拍已移除：改由序列帧层接管
+
+
+  if (window.LOOK) {
+    renderer.toneMappingExposure = window.LOOK.exposure;
+    // ── 模型自动对齐视频 ──
+    //    透视相机下模型占画布宽 ≈ 0.616（fov40 / dist=1.55·maxDim）；
+    //    视频的实测占比是 seqFrac。两者相除就得到"让宽度相等"的缩放。
+    //    因为都来自画布本身，窗口怎么变都自动成立 —— 这就是响应式对齐。
+    // 模型在画布宽度上占多少 —— 由相机参数实时推出，不用魔数。
+    // 以前写死 0.616，那是"长轴竖直"的假设；龙是横向的，所以一直算小。
+    let modelFrac = 0.4;
+    if (model && baseDist > 0) {
+      const halfT = Math.tan((camera.fov * Math.PI) / 360);
+      const visibleW = 2 * baseDist * halfT * (ART_W / ART_H);
+      modelFrac = maxDim / visibleW;
+    }
+    const auto = (window.SEQ && window.SEQ.auto === false) || seqFrac <= 0.01 || modelFrac <= 0.01
+      ? 1
+      : (seqFrac / modelFrac);
+    if (root) root.scale.setScalar(window.LOOK.modelScale * auto);
+    window.__auto = auto; window.__modelFrac = modelFrac;
+  }
+
+  // ── 待机微动：模型基本不动，只有尾巴极轻地摆、头极轻地歪 ──
+  //    模型是 AI 生成的三角面 + 距离权重，转动超过 ~10°/节就会夹皱，
+  //    所以这里只给"活的呼吸感"，不承担"游动"——游动由视频序列帧负责。
+  if (skelBones.length) {
+    for (let i = 0; i < skelBones.length; i++) {
+      const b = skelBones[i];
+      const nm = b.name || "";
+      let rot = 0;
+      if (nm.startsWith("spine_")) {
+        const idx = parseInt(nm.slice(6), 10) || 0;
+        const k = idx / 17;
+        rot = reduceMotion ? 0 : Math.sin(t * 0.9 - idx * 0.34) * 0.022 * k;  // 只有后半段轻摆
+      } else if (nm === "head") {
+        rot = reduceMotion ? 0 : Math.sin(t * 0.5) * 0.030;
+      } else if (nm === "jaw") {
+        rot = reduceMotion ? 0 : Math.abs(Math.sin(t * 0.7)) * 0.045;
+      }
+      _segQ.setFromAxisAngle(_segAxis, rot);
+      b.quaternion.copy(skelBase[i]).multiply(_segQ);
+    }
+  }
+
+  swim.uTime.value = reduceMotion ? 0 : t;
+  renderer.render(scene, camera);
+}
+
+// ── 布局只有一个入口 ──
+//    以前初始化漏了 applyDesignScale()，首屏 --k 停在 CSS 默认值 1，
+//    拉一下窗口才变成真实值 → 两套结构。现在统一走 layout()。
+function layout() {
+ try {
+  applyDesignScale();               // 算 --k
+
+  // ── 三明治：龙只占"标题底 → 按钮顶"之间 ──
+  //    不猜高度，直接量 DOM。这样文字多长、字号多大都不会压到龙。
+  const inner = document.querySelector(".hero-inner");
+  if (inner) {
+    const ib = inner.getBoundingClientRect().bottom;
+    // 文字块（含按钮）以下到视口底部，都是龙的空间
+    const bandTop = ib + 8;
+    const bandBot = innerHeight - 30 * (window.__K || 1);
+    const bandH = Math.max(120, bandBot - bandTop);
+    const vw = innerWidth;
+    // 允许龙适度超出"标题底→按钮顶"这条带：
+    // 素材本身四周是透明边距，超出一点不会真的压到文字，但画面会饱满很多
+    const OVER = 2.90;   // 放到"龙头伸到按钮附近"的尺度
+    const artW = Math.min(vw * 0.97, 1750, bandH * ART_RATIO * OVER);
+    const artH = artW / ART_RATIO;
+    // 偏上放置：取带宽的 42% 处，而不是正中
+    let cy = bandTop + bandH * 0.32;
+    // 钳制：[顶部留 8px, 底部留 8px]，保证整条龙都在视口里
+    const lo = artH / 2 + 8;
+    const hi = innerHeight - artH / 2 - 8;
+    if (hi > lo) cy = Math.max(lo, Math.min(hi, cy));
+    document.documentElement.style.setProperty("--art-w-px", Math.round(artW) + "px");
+    document.documentElement.style.setProperty("--art-cy", Math.round(cy) + "px");
+  }
+ } catch (e) { console.error("[layout]", e); }
+  fitCanvas();                      // 画布内部分辨率（固定值，幂等）
+  sizeSeqCanvas();
+  measureScroll();                  // 量滚动总长
+  if (seqMeta) drawSeq.last = -1;   // 强制重绘一帧
+}
+
+// 刷新后必须回到初始态：浏览器默认会恢复上次的滚动位置，
+// 而整条动画完全由 scrollY 驱动 —— 不关掉它，刷新就停在半路。
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+if (!/[?&]P=/.test(location.search)) {
+  const sb = document.documentElement.style.scrollBehavior;
+  document.documentElement.style.scrollBehavior = "auto";
+  window.scrollTo(0, 0);
+  document.documentElement.style.scrollBehavior = sb || "";
+}
+
+layout();
+readScroll();
+tick();
+
+// ?debug=1：动态建一个浮层，保证可见（不依赖 #err 的样式）
+if (/[?&]debug=1/.test(location.search)) {
+  const box = document.createElement("pre");
+  box.style.cssText = "position:fixed;left:6px;top:6px;z-index:99999;margin:0;" +
+    "padding:8px 10px;background:rgba(0,0,0,0.92);color:#7CFC8A;" +
+    "font:11px/1.45 Consolas,monospace;border:1px solid #2a5;white-space:pre;";
+  document.body.appendChild(box);
+  const g = el => document.getElementById(el);
+  const upd = () => {
+    const seqC = g("seq"), glC = g("gl");
+    box.textContent = [
+      "P=" + (typeof P === "number" ? P.toFixed(3) : "?") + "  scrollY=" + Math.round(scrollY),
+      "scrollTotal=" + Math.round(typeof scrollTotal === "number" ? scrollTotal : -1),
+      "storyH=" + (g("story") ? g("story").offsetHeight : -1) + "  k=" + (window.__K ? window.__K.toFixed(3) : "?"),
+      "seqMeta=" + (seqMeta ? seqMeta.count + "f" : "NULL") + "  ready=" + seqReady + "  seqFrac=" + (typeof seqFrac === "number" ? seqFrac.toFixed(3) : "?"),
+      "seq box=" + (seqC ? Math.round(seqC.clientWidth) + "x" + Math.round(seqC.clientHeight) : "-") + " bmp=" + (seqC ? seqC.width + "x" + seqC.height : "-"),
+      "seq disp=" + (seqC ? seqC.style.display : "-") + " op=" + (seqC ? seqC.style.opacity : "-"),
+      "gl  box=" + (glC ? Math.round(glC.clientWidth) + "x" + Math.round(glC.clientHeight) : "-"),
+      "--art-w-px=" + getComputedStyle(document.documentElement).getPropertyValue("--art-w-px").trim(),
+      "--art-cy=" + getComputedStyle(document.documentElement).getPropertyValue("--art-cy").trim(),
+      "model=" + (model ? "ok" : "NULL") + "  auto=" + (window.__auto || 0).toFixed(3) + "  modelFrac=" + (window.__modelFrac || 0).toFixed(3),
+      "root.scale=" + (root ? root.scale.x.toFixed(3) : "-") + "  visible=" + (root ? root.visible : "-"),
+      "nav.top=" + Math.round(document.querySelector("nav").getBoundingClientRect().top) +
+        "  seq.top=" + Math.round(seqC.getBoundingClientRect().top) +
+        "  gl.top=" + Math.round(glC.getBoundingClientRect().top),
+      "bodyOverflowX=" + getComputedStyle(document.body).overflowX + "  htmlOverflow=" + getComputedStyle(document.documentElement).overflow + "  bodyOverflow=" + getComputedStyle(document.body).overflow,
+      "scrollY=" + Math.round(scrollY) + "  innerH=" + innerHeight
+    ].join("\n");
+  };
+  upd();
+  setInterval(upd, 200);
+}
+
+
+
+
+// 开发钩子：?p=0.3 直接定位到该滚动进度（无头截图用，不影响正常浏览）
+if (/[?&]p=/.test(location.search)) {
+  const target = parseFloat(new URLSearchParams(location.search).get("p")) || 0;
+  requestAnimationFrame(() => {
+    // 必须临时关掉 smooth：否则 scrollTo 是动画，截图会抓到中途，fixed 图层画错位
+    const prev = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = "auto";
+    window.scrollTo(0, Math.round(target * (scrollTotal || 1)));
+    readScroll();
+    document.documentElement.style.scrollBehavior = prev || "";
+  });
+}
+
+addEventListener("resize", layout);
+addEventListener("orientationchange", layout);
+// 字体加载完成后布局会变，再补一次
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { layout(); }).catch(() => {});
+}
+// 首帧后再量一次，兜住任何延迟布局
+requestAnimationFrame(() => { layout(); });
+</script>
+</body>
+</html>
